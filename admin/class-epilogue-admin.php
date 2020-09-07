@@ -111,7 +111,7 @@ class Epilogue_Admin {
 		$cap_type = 'post';
 		$plural = 'Facebook Posts';
 		$single = 'Facebook Post';
-		$cpt_name = 'fb-post';
+		$cpt_name = 'fb_posts';
 
 		$opts['can_export'] = TRUE;
 		$opts['capability_type'] = $cap_type;
@@ -170,9 +170,37 @@ class Epilogue_Admin {
 		$opts['rewrite']['slug'] = esc_html__( strtolower( $plural ), 'epilogue' );
 		$opts['rewrite']['with_front']	= FALSE;
 
-  	$opts = apply_filters( 'now-hiring-cpt-options', $opts );
 		register_post_type( strtolower( $cpt_name ), $opts );
+
+		// Remove title because this doesn't exist for FB Posts, and it
+		// can't be used for content because it has 60 character limit
+		remove_post_type_support($cpt_name, 'title');
+
+		// TODO add metas for FB Posts
+
 	}
+
+	public static function fb_posts_table_head ( $columns ) {
+		unset( $columns['title'] );
+		unset( $columns['date']  );
+		$defaults['date'] = 'Date';
+		$defaults['post'] = 'Post';
+    return $defaults;
+	}
+
+	public static function fb_posts_custom_column_values ( $column, $post_id ) {
+     switch ( $column ) {
+       case 'post'   :
+			   $fb_post_limit = 160;
+			 	 $content = wp_filter_nohtml_kses(get_post_field('post_content', $post_id));
+				 $croppedContent = (strlen($content) < $fb_post_limit) ?
+				 	 $content :
+					 substr($content, 0, $fb_post_limit) . '...';
+				 echo '<a href=\'/wp-admin/post.php?post=' . $post_id . '&action=edit\'>' . $croppedContent . '</a>';
+       break;
+     }
+	}
+
 
 	/**
 	* Register the administration menu for this plugin into the WordPress Dashboard menu.
@@ -206,6 +234,13 @@ class Epilogue_Admin {
 	public function display_plugin_setup_page() {
 		include_once( 'partials/epilogue-admin-display.php' );
 	}
+
+
+	/**
+	* Helper functions for the admin settings page
+	*
+	* @since 1.0.0
+	*/
 
 	public function options_update() {
 	    register_setting($this->plugin_name, $this->plugin_name, array($this, 'validate'));

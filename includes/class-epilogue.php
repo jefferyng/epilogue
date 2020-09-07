@@ -160,9 +160,17 @@ class Epilogue {
 
 		$this->loader->add_action( 'admin_enqueue_scripts', $plugin_admin, 'enqueue_styles' );
 		$this->loader->add_action( 'admin_enqueue_scripts', $plugin_admin, 'enqueue_scripts' );
+
+		// Init custom post type: fb post
 		$this->loader->add_action( 'init', $plugin_admin, 'new_cpt_fb_posts' );
 
+		// Modify Admin fb post List Columns
+		$this->loader->add_filter( 'manage_fb_posts_posts_columns', $plugin_admin, 'fb_posts_table_head' );
+		$this->loader->add_action( 'manage_fb_posts_posts_custom_column', $plugin_admin, 'fb_posts_custom_column_values', 10, 2 );
+
 	}
+
+
 
 	/**
 	 * Register all of the hooks related to the public-facing functionality
