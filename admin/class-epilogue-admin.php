@@ -196,7 +196,7 @@ class Epilogue_Admin {
 				 $croppedContent = (strlen($content) < $fb_post_limit) ?
 				 	 $content :
 					 substr($content, 0, $fb_post_limit) . '...';
-				 echo '<a href=\'/wp-admin/post.php?post=' . $post_id . '&action=edit\'>' . $croppedContent . '</a>';
+				 echo '<a href=\'' . admin_url('/post.php?post=') . $post_id . '&action=edit\'>' . $croppedContent . '</a>';
        break;
      }
 	}
@@ -250,6 +250,185 @@ class Epilogue_Admin {
 	    $valid = array();
 	    $valid['setting-01'] = (isset($input['setting-01']) && !empty($input['setting-01'])) ? 1 : 0;
 	    return $valid;
+	 }
+
+	 public function process_fb_posts() {
+		 echo '<p>Process starting....</p>';
+
+		 // I get the feeling that if a person's post history is especially big there might
+		 // be posts_2, posts_3, etc,.
+		 $posts_file = trailingslashit(wp_upload_dir()['basedir']) . 'data/posts/your_posts_1.json';
+		 echo '<p>Search file....' . $posts_file . '</p>';
+
+		 $content = file_get_contents( $posts_file );
+		 $posts = json_decode( $content );
+
+		 echo '<p>content entries: ' . sizeof($posts) . '</p>';
+
+		 foreach ($posts as $post) {
+
+			 $dataPost = '';
+			 $type = '';
+			 $link = '';
+
+			 if ($this->isLink($post)) {
+				 $type = 'link';
+				 $link = $this->getExternalContextUrl($post);
+			 } else if ($this->isExternalPost($post)) {
+				 $type = 'external-post';
+				 $link = $this->getExternalContextSource($post);
+				 $dataPost = $post->title;
+			 } else if ($this->isImage($post)) {
+				 $type = 'image';
+				 $link = $this->getImageUri($post);
+			 } else if ($this->isEvent($post)) {
+				 $type = 'event';
+				 $dataPost = $this->getEventName($post);
+			 } else if ($this->isPoll($post)) {
+				 $type = 'poll';
+				 $dataPost = $post->title;
+			 } else if ($this->isPlace($post)) {
+				 $type = 'place';
+				 $dataPost = $this->getPlace($post)->name;
+			 } else if ($this->isPost($post)) {
+				 $type = 'post';
+				 $dataPost = $this->getDataPost($post);
+			 } else if ($this->isEmptyPost($post)) {
+				 $type = 'empty';
+				 $link = '';
+			 } else  {
+				 $type = 'unknown';
+				 $link = '';
+			 }
+
+			 $timestamp = $this->getTimestamp($post);
+			 $dataPost = !empty($dataPost) ? $dataPost : $this->getDataPost($post);
+
+			 echo '<p>(' . $timestamp . ' - ' . $type . ') ' . $dataPost . '<br/>' .$link . '</p>';
+
+		 }
+
+	 }
+
+	 function getTimestamp ($post) {
+		 try {
+			 if (!empty($post) && !empty($post->data) && !empty($post->data->update_timestamp)) {
+				 return $post->data->update_timestamp;
+			 } else if (!empty($post) && !empty($post->timestamp)) {
+				 return $post->timestamp;
+			 } else {
+				 return 'TNF';
+			 }
+		 } catch (Exception $e) {
+			 return 'TNFe';
+		 }
+	 }
+
+	 function isImage ($post) {
+		 return !empty($this->getImageUri($post));
+	 }
+
+	 function getImageUri ($post) {
+		 try {
+			 return $post->attachments[0]->data[0]->media->uri;
+		 } catch (Exception $e) {
+			 return null;
+		 }
+	 }
+
+	 function isLink ($post) {
+		 return !empty($this->getExternalContextUrl($post));
+	 }
+
+	 function getDataPost ($post) {
+		 try {
+			 return $post->data[0]->post;
+		 } catch (Exception $e) {
+			 return null;
+		 }
+	 }
+
+	 function isEvent ($post) {
+		 return !empty($this->getEventName($post));
+	 }
+
+	 function getEventName ($post) {
+		 try {
+			 return $post->attachments[0]->data[0]->event->name;
+		 } catch (Exception $e) {
+			 return null;
+		 }
+	 }
+
+	 function isPost ($post) {
+		 return !empty($this->getDataPost($post));
+	 }
+
+	 // check for a very specific data structure.
+	 // looks like it's created when someone starts a post but doesn't
+	 // actually go through with it.
+	 function isEmptyPost ($post) {
+		 // check if timestamp exists
+		 // check if attachments is Empty
+		 // check if data has only 1 entry, and the entry has only one key update_timestamp
+		 return ( empty($post->attachments) &&
+		   !empty($post->data) &&
+			 sizeof($post->data) == 1 &&
+			 !empty($post->data[0]) &&
+			 is_object($post->data[0]) &&
+			 $this->getJSONKeyCount($post->data[0]) == 1 &&
+			 !empty($post->data[0]->update_timestamp)
+		 );
+	 }
+
+	 function getJSONKeyCount ($json) {
+		 $array = get_object_vars($json);
+		 $properties = array_keys($array);
+		 return count($properties);
+	 }
+
+	 function getExternalContextUrl ($post) {
+		 try {
+			 return $post->attachments[0]->data[0]->external_context->url;
+		 } catch (Exception $e) {
+			 return null;
+		 }
+	 }
+
+	 function isExternalPost ($post) {
+		 return !empty($this->getExternalContextSource($post));
+	 }
+
+	 function isPoll ($post)	 {
+		 return !empty($this->getPoll($post));
+	 }
+
+	 function getPoll ($post) {
+		 try {
+			 return $post->attachments[0]->data[0]->poll;
+ 		 } catch (Exception $e) {
+			 return null;
+		 }
+	 }
+
+	 function getExternalContextSource ($post) {
+		 try {
+			 return $post->attachments[0]->data[0]->external_context->source;
+		 } catch (Exception $e) {
+			 return null;
+		 }
+	 }
+
+	 function isPlace($post) {
+		 return !empty($this->getPlace($post));
+	 }
+
+	 function getPlace ($post) {
+		 try {
+			 return $post->attachments[0]->data[0]->place;
+		 } catch (Exception $e) {
+			 return null;
+		 }
 	 }
 
 }
