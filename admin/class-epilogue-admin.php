@@ -176,8 +176,6 @@ class Epilogue_Admin {
 		// can't be used for content because it has 60 character limit
 		remove_post_type_support($cpt_name, 'title');
 
-		// TODO add metas for FB Posts
-
 	}
 
 	public static function fb_posts_table_head ( $columns ) {
@@ -265,109 +263,183 @@ class Epilogue_Admin {
 
 		 echo '<p>content entries: ' . sizeof($posts) . '</p>';
 
+		 // To preserve as much information as possible,
+		 // post/data and time should be kept as part of the fb post.
+		 // Data/attachement of the post should be typed, and the data stringified.
+		 // The two pieces of info should be used as a key/value pair of
+		 // postmeta associated with the fb post.
+
 		 foreach ($posts as $post) {
 
-			 $dataPost = '';
-			 $type = '';
-			 $link = '';
+			 $FBPostID = $this->createFBPost($post);
+			 if ($FBPostID == 0) { continue; }
 
-			 if ($this->isLink($post)) {
-				 $type = 'link';
-				 $link = $this->getExternalContextUrl($post);
-			 } else if ($this->isExternalPost($post)) {
-				 $type = 'external-post';
-				 $link = $this->getExternalContextSource($post);
-				 $dataPost = $post->title;
-			 } else if ($this->isImage($post)) {
-				 $type = 'image';
-				 $link = $this->getImageUri($post);
-			 } else if ($this->isEvent($post)) {
-				 $type = 'event';
-				 $dataPost = $this->getEventName($post);
-			 } else if ($this->isPoll($post)) {
-				 $type = 'poll';
-				 $dataPost = $post->title;
-			 } else if ($this->isPlace($post)) {
-				 $type = 'place';
-				 $dataPost = $this->getPlace($post)->name;
-			 } else if ($this->isPost($post)) {
-				 $type = 'post';
-				 $dataPost = $this->getDataPost($post);
-			 } else if ($this->isEmptyPost($post)) {
-				 $type = 'empty';
-				 $link = '';
-			 } else  {
-				 $type = 'unknown';
-				 $link = '';
+			 // Insert each attachment seperately because it's
+			 // possible to have duplicate data types (eg multiple photos),
+			 // and that can't be handled with an by adding all the
+			 // meta to a single associative array.
+
+			 $attachments = !empty($post->attachments) ? $post->attachments : [];
+
+			 foreach ($attachments as $attachment) {
+				 $this->createFBPostMeta($attachment, $FBPostID);
 			 }
-
-			 $timestamp = $this->getTimestamp($post);
-			 $dataPost = !empty($dataPost) ? $dataPost : $this->getDataPost($post);
-
-			 echo '<p>(' . $timestamp . ' - ' . $type . ') ' . $dataPost . '<br/>' .$link . '</p>';
 
 		 }
 
+		 echo '<p>content entries successfully added</p>';
 	 }
 
-	 function getTimestamp ($post) {
+	 private function createFBPost ($post) {
+		 try {
+			 // Deleted and attempted posts are still recorded
+			 // but we don't need to save them here since there's
+			 // no information other than timestamp associated with it.
+			 if ($this->isEmptyPost($post)) { return 0; }
+
+			 // get post, timestamp and create a new fb post with it
+			 $dataPost = $this->getDataPost($post);
+
+			 $timestamp = $post->timestamp;
+			 $updateTimestamp = $this->getUpdateTimestamp($post);
+
+			 $postdate = date("Y-m-d H:i:s", $timestamp);
+
+			 $postOptions = [
+				 'post_type' => 'fb_posts',
+				 'post_content' => $dataPost,
+				 'post_date_gmt' => $postdate,
+				 'post_status' => 'publish',
+				 'comment_status' => 'closed',
+				 'ping_status' => 'closed',
+			 ];
+
+			 if (!empty($updateTimestamp)) {
+				 $updateDate = date("Y-m-d H:i:s", $updateTimestamp);
+				 $postOptions['post_modified_gmt'] = $updateDate;
+			 }
+
+			 // insert as new fb post, and return ID
+			 return wp_insert_post($postOptions);
+
+		 } catch (Exception $e) {
+			 echo 'Error Insert FBPost: [' . $timestamp . '] - ' . $dataPost;
+			 return 0;
+		 }
+	 }
+
+	 private function createFBPostMeta ($attachment, $FBPostID) {
+		 try {
+			 // determine the type of the $attachment
+			 // stringifying the rest of it for storage as meta
+			 $dataType = $this->getAttachmentDatatype($attachment);
+			 $stringifedJSON = json_encode($attachment);
+			 add_post_meta( $FBPostID, $dataType, $stringifedJSON, false);
+		 } catch (Exception $e) {
+			 echo 'Error Insert Meta: [' . $FBPostID . ']: ' . json_encode($attachment);
+		 }
+	 }
+
+	 private function getUpdateTimestamp ($post) {
 		 try {
 			 if (!empty($post) && !empty($post->data) && !empty($post->data->update_timestamp)) {
 				 return $post->data->update_timestamp;
-			 } else if (!empty($post) && !empty($post->timestamp)) {
-				 return $post->timestamp;
 			 } else {
-				 return 'TNF';
+				 return null;
 			 }
 		 } catch (Exception $e) {
-			 return 'TNFe';
+			 return null;
 		 }
 	 }
 
-	 function isImage ($post) {
-		 return !empty($this->getImageUri($post));
+	 public const FB_DATA_TYPE_MEDIA = 'MEDIA';
+	 public const FB_DATA_TYPE_LINK = 'LINK';
+	 public const FB_DATA_TYPE_EVENT = 'EVENT';
+	 public const FB_DATA_TYPE_PLACE = 'PLACE';
+	 public const FB_DATA_TYPE_EXTERNAL = 'EXTERNAL';
+	 public const FB_DATA_TYPE_POLL = 'POLL';
+	 public const FB_DATA_TYPE_UNKNOWN = 'UNKNOWN';
+
+	 private function getAttachmentDatatype ($attachment) {
+
+		 if ($this->isMedia($attachment)) {
+			 return self::FB_DATA_TYPE_MEDIA;
+		 } else if ($this->isLink($attachment)) {
+			 return self::FB_DATA_TYPE_LINK;
+		 } else if ($this->isEvent($attachment)) {
+			 return self::FB_DATA_TYPE_LINK;
+		 } else if ($this->isPlace($attachment)) {
+			 return self::FB_DATA_TYPE_PLACE;
+		 } else if ($this->isExternalPost($attachment)) {
+			 return self::FB_DATA_TYPE_EXTERNAL;
+		 } else if ($this->isPoll($attachment)) {
+			 return self::FB_DATA_TYPE_POLL;
+		 } else {
+			 return self::FB_DATA_TYPE_UNKNOWN;
+		 }
 	 }
 
-	 function getImageUri ($post) {
+	 private function getAttachmentData($attachment, $type) {
 		 try {
-			 return $post->attachments[0]->data[0]->media->uri;
+		   return get_object_vars($attachment->data[0])[$type];
 		 } catch (Exception $e) {
 			 return null;
 		 }
 	 }
 
-	 function isLink ($post) {
-		 return !empty($this->getExternalContextUrl($post));
+	 private function isMedia ($attachment) {
+		 return !empty($this->getAttachmentData($attachment, 'media'));
 	 }
 
-	 function getDataPost ($post) {
+	 private function isEvent ($attachment) {
+		 return !empty($this->getAttachmentData($attachment, 'event'));
+	 }
+
+	 private function isPlace($attachment) {
+		 return !empty($this->getAttachmentData($attachment, 'place'));
+	 }
+
+	 private function isPoll ($attachment)	 {
+		 return !empty($this->getAttachmentData($attachment, 'poll'));
+	 }
+
+	 private function isLink ($attachment) {
+		 return !empty($this->getExternalContextUrl($attachment));
+	 }
+
+	 private function getExternalContextUrl ($attachment) {
 		 try {
-			 return $post->data[0]->post;
+			 return $attachment->data[0]->external_context->url;
 		 } catch (Exception $e) {
 			 return null;
 		 }
 	 }
 
-	 function isEvent ($post) {
-		 return !empty($this->getEventName($post));
+	 private function isExternalPost ($attachment) {
+		 return !empty($this->getExternalContextSource($attachment));
 	 }
 
-	 function getEventName ($post) {
+	 private function getExternalContextSource ($attachment) {
 		 try {
-			 return $post->attachments[0]->data[0]->event->name;
+			 return $attachment->data[0]->external_context->source;
 		 } catch (Exception $e) {
 			 return null;
 		 }
 	 }
 
-	 function isPost ($post) {
-		 return !empty($this->getDataPost($post));
+	 private function getDataPost ($post) {
+		 try {
+			 $dataPost = $post->data[0]->post;
+			 return !empty($dataPost) ? $dataPost : '';
+		 } catch (Exception $e) {
+			 return '';
+		 }
 	 }
 
 	 // check for a very specific data structure.
 	 // looks like it's created when someone starts a post but doesn't
 	 // actually go through with it.
-	 function isEmptyPost ($post) {
+	 private function isEmptyPost ($post) {
 		 // check if timestamp exists
 		 // check if attachments is Empty
 		 // check if data has only 1 entry, and the entry has only one key update_timestamp
@@ -381,54 +453,10 @@ class Epilogue_Admin {
 		 );
 	 }
 
-	 function getJSONKeyCount ($json) {
+	 private function getJSONKeyCount ($json) {
 		 $array = get_object_vars($json);
 		 $properties = array_keys($array);
 		 return count($properties);
-	 }
-
-	 function getExternalContextUrl ($post) {
-		 try {
-			 return $post->attachments[0]->data[0]->external_context->url;
-		 } catch (Exception $e) {
-			 return null;
-		 }
-	 }
-
-	 function isExternalPost ($post) {
-		 return !empty($this->getExternalContextSource($post));
-	 }
-
-	 function isPoll ($post)	 {
-		 return !empty($this->getPoll($post));
-	 }
-
-	 function getPoll ($post) {
-		 try {
-			 return $post->attachments[0]->data[0]->poll;
- 		 } catch (Exception $e) {
-			 return null;
-		 }
-	 }
-
-	 function getExternalContextSource ($post) {
-		 try {
-			 return $post->attachments[0]->data[0]->external_context->source;
-		 } catch (Exception $e) {
-			 return null;
-		 }
-	 }
-
-	 function isPlace($post) {
-		 return !empty($this->getPlace($post));
-	 }
-
-	 function getPlace ($post) {
-		 try {
-			 return $post->attachments[0]->data[0]->place;
-		 } catch (Exception $e) {
-			 return null;
-		 }
 	 }
 
 }
