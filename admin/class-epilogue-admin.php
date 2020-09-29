@@ -250,6 +250,13 @@ class Epilogue_Admin {
 	    return $valid;
 	 }
 
+	 /**
+ 	* Main functions for reading, processing, and creating
+	* fb posts from the exported Facebook json files
+ 	*
+ 	* @since 1.0.0
+ 	*/
+
 	 public function process_fb_posts() {
 		 echo '<p>Process starting....</p>';
 

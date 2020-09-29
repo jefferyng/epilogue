@@ -100,4 +100,70 @@ class Epilogue_Public {
 
 	}
 
+	/**
+	* Returns a post object of fb posts
+	*
+	* @param array $params An array of optional parameters
+	* quantity Number of quote posts to return
+	*
+	* @return object A post object
+	*/
+
+	public function get_fb_posts($params) {
+		$return = '';
+		$args = array(
+			'post_type' => 'fb_posts',
+			'posts_per_page' => $params,
+			'orderby' => 'desc'
+		);
+
+		$query = new WP_Query( $args );
+
+		if ( is_wp_error( $query ) ) {
+			$return = 'Oops!...No posts for you!';
+		} else {
+			$return = $query->posts;
+		}
+
+		return $return;
+	} // get_fb_posts()
+
+	/**
+	* Registers all shortcodes at once
+	*
+	* @return [type] [description]
+	*/
+
+	public function register_shortcodes() {
+		add_shortcode( 'facebookposts', array( $this, 'list_fb_posts' ) );
+	} // register_shortcodes()
+
+	public function list_fb_posts( $atts = array() ) {
+		ob_start();
+
+		$args = shortcode_atts( array(
+			'num-quotes' => 5,
+			'quotes-title' => 'Facebook Posts',),
+			$atts
+		);
+
+		$items = $this->get_fb_posts($args['num']);
+
+		if ( is_array( $items ) || is_object( $items ) ) {
+			echo('<h4>' . $args['quotes-title'] . '</h4><ul>');
+			foreach ( $items as $item ) {
+				echo('<li>' . $item->post_content . '</li>');
+			} // foreach
+			echo ('</ul>');
+		} else {
+			echo $items;
+		}
+
+		$output = ob_get_contents();
+		ob_end_clean();
+
+		return $output;
+
+	} // list_fb_posts()
+
 }

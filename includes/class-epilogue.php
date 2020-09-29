@@ -167,7 +167,6 @@ class Epilogue {
 		// Modify Admin fb post List Columns
 		$this->loader->add_filter( 'manage_fb_posts_posts_columns', $plugin_admin, 'fb_posts_table_head' );
 		$this->loader->add_action( 'manage_fb_posts_posts_custom_column', $plugin_admin, 'fb_posts_custom_column_values', 10, 2 );
-
 	}
 
 
@@ -186,6 +185,8 @@ class Epilogue {
 		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_styles' );
 		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_scripts' );
 
+		// Enable short codes
+		$this->loader->add_action( 'init', $plugin_public, 'register_shortcodes' );
 	}
 
 	/**
