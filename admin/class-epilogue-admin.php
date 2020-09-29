@@ -179,23 +179,51 @@ class Epilogue_Admin {
 	}
 
 	public static function fb_posts_table_head ( $columns ) {
-		unset( $columns['title'] );
-		unset( $columns['date']  );
+		/// unset( $columns['title'] );
+		// unset( $columns['date']  );
 		$defaults['date'] = 'Date';
+		$defaults['type'] = 'Type';
 		$defaults['post'] = 'Post';
     return $defaults;
 	}
 
 	public static function fb_posts_custom_column_values ( $column, $post_id ) {
+
+		$metas = get_post_meta( $post_id, '', false);
+
+
+		/*
+		$type =
+		foreach ($metas as $type => $arrMeta) {
+			echo $key . ' ';
+			foreach ($meta as $value) {
+				echo $value . '<br/>';
+			}
+		}
+		*/
+
+
+
      switch ( $column ) {
-       case 'post'   :
+       case 'post' :
 			   $fb_post_limit = 160;
 			 	 $content = wp_filter_nohtml_kses(get_post_field('post_content', $post_id));
 				 $croppedContent = (strlen($content) < $fb_post_limit) ?
 				 	 $content :
 					 substr($content, 0, $fb_post_limit) . '...';
-				 echo '<a href=\'' . admin_url('/post.php?post=') . $post_id . '&action=edit\'>' . $croppedContent . '</a>';
-       break;
+				 if (!empty($content)) {
+					 echo '<a href=\'' . admin_url('/post.php?post=') . $post_id . '&action=edit\'>' . $croppedContent . '</a><br/><br/>';
+				 }
+
+				 if (!empty($metas['LINK'])) {
+					 $metaObj = json_decode($metas['LINK'][0]);
+					 echo 'URL: ' . $metaObj->data[0]->external_context->url;
+				 }
+
+       	 break;
+			 case 'type' :
+				 foreach ($metas as $type => $arrMeta) { echo $type . ' '; }
+				 break;
      }
 	}
 
