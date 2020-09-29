@@ -191,19 +191,6 @@ class Epilogue_Admin {
 
 		$metas = get_post_meta( $post_id, '', false);
 
-
-		/*
-		$type =
-		foreach ($metas as $type => $arrMeta) {
-			echo $key . ' ';
-			foreach ($meta as $value) {
-				echo $value . '<br/>';
-			}
-		}
-		*/
-
-
-
      switch ( $column ) {
        case 'post' :
 			   $fb_post_limit = 160;

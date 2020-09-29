@@ -147,7 +147,7 @@ class Epilogue_Public {
 			$atts
 		);
 
-		$items = $this->get_fb_posts($args['num']);
+		$items = $this->get_fb_posts($args['num']);		
 
 		if ( is_array( $items ) || is_object( $items ) ) {
 			echo('<h4>' . $args['quotes-title'] . '</h4><ul>');
