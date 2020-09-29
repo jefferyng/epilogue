@@ -142,7 +142,7 @@ class Epilogue_Public {
 		ob_start();
 
 		$args = shortcode_atts( array(
-			'num-quotes' => 5,
+			'num' => 5,
 			'quotes-title' => 'Facebook Posts',),
 			$atts
 		);
